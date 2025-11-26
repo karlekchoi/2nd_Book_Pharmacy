@@ -1,0 +1,7 @@
+{
+  "name": "Book Pharmacy",
+  "description": "A book recommendation chatbot with a Gen Z aesthetic, using glassmorphism and animations. It provides personalized book prescriptions based on your mood and situation, powered by the Gemini API.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

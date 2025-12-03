@@ -18,7 +18,7 @@ export default async function handler(
   }
 
   try {
-    const url = `http://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?` +
+    const url = `https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?` +
       `ttbkey=${ALADIN_API_KEY}` +
       `&itemIdType=ISBN13` +
       `&ItemId=${isbn}` +

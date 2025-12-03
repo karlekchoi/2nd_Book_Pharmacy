@@ -42,7 +42,7 @@ export default async function handler(
           title: { type: Type.STRING, description: "The book title in Korean." },
           author: { type: Type.STRING, description: "The author's name in Korean." },
           publisher: { type: Type.STRING, description: "The publisher's name in Korean." },
-          isbn: { type: Type.STRING, description: "The book's 13-digit ISBN, without hyphens." },
+          isbn: { type: Type.STRING, description: "The book's exact 13-digit ISBN-13 number (without hyphens or spaces). This MUST be a real, existing ISBN for the actual book you are recommending. Do not make up or guess ISBNs. Only provide ISBNs for books that actually exist and are available in South Korea." },
           description: { type: Type.STRING, description: "A short, insightful one-sentence description of the book." },
           aiReason: { type: Type.STRING, description: "An empathetic reason for recommending this book, written in a calm and thoughtful tone." },
           vibe: {
@@ -85,7 +85,11 @@ ${genrePreference}
 Their goal for reading is: ${userInput.purpose || "Not specified."}
 ${locationInfo}
 
-Based on this, recommend exactly 3 books. For each book, provide the requested information including its 13-digit ISBN. Ensure the library information is plausible for major public libraries near the user's specified location.`;
+Based on this, recommend exactly 3 books. For each book, provide the requested information including its exact 13-digit ISBN-13 number.
+
+CRITICAL: The ISBN must be a real, existing ISBN-13 for the actual book you are recommending. Do NOT make up, guess, or generate fake ISBNs. Only recommend books that you know exist and can provide their real ISBN-13 numbers. The ISBN must be exactly 13 digits, without hyphens or spaces (e.g., "9788936434267").
+
+Ensure the library information is plausible for major public libraries near the user's specified location.`;
 
     if (excludeTitles.length > 0) {
       prompt += `\n\nImportant: Please provide a completely new set of recommendations. Do NOT include any of the following titles: ${excludeTitles.join(', ')}.`;
@@ -105,18 +109,41 @@ Based on this, recommend exactly 3 books. For each book, provide the requested i
     const jsonString = response.text.trim();
     const booksFromAI = JSON.parse(jsonString);
 
-    // Programmatically add purchase links
-    const results = booksFromAI.map((book: any) => {
-      const encodedTitle = encodeURIComponent(book.title);
-      return {
-        ...book,
-        purchaseLinks: {
-          yes24: `https://www.yes24.com/Product/Search?query=${encodedTitle}`,
-          kyobo: `https://search.kyobobook.co.kr/search?keyword=${encodedTitle}`,
-          aladin: `https://www.aladin.co.kr/search/wsearchresult.aspx?SearchWord=${encodedTitle}`
+    // Validate and clean ISBNs
+    const validateISBN = (isbn: string): string | null => {
+      if (!isbn || typeof isbn !== 'string') return null;
+      // Remove any hyphens, spaces, or non-digit characters
+      const cleaned = isbn.replace(/[^0-9]/g, '');
+      // Must be exactly 13 digits
+      if (cleaned.length === 13 && /^\d{13}$/.test(cleaned)) {
+        return cleaned;
+      }
+      return null;
+    };
+
+    // Programmatically add purchase links and validate ISBNs
+    const results = booksFromAI
+      .map((book: any) => {
+        const validatedISBN = validateISBN(book.isbn);
+        if (!validatedISBN) {
+          console.warn(`Invalid ISBN for book "${book.title}": ${book.isbn}`);
+          // Keep the book but with cleaned ISBN (or null if invalid)
+          book.isbn = validatedISBN || book.isbn.replace(/[^0-9]/g, '').slice(0, 13) || '';
+        } else {
+          book.isbn = validatedISBN;
         }
-      };
-    });
+        
+        const encodedTitle = encodeURIComponent(book.title);
+        return {
+          ...book,
+          purchaseLinks: {
+            yes24: `https://www.yes24.com/Product/Search?query=${encodedTitle}`,
+            kyobo: `https://search.kyobobook.co.kr/search?keyword=${encodedTitle}`,
+            aladin: `https://www.aladin.co.kr/search/wsearchresult.aspx?SearchWord=${encodedTitle}`
+          }
+        };
+      })
+      .filter((book: any) => book.isbn && book.isbn.length === 13); // Filter out books with invalid ISBNs
 
     res.status(200).json(results);
 

@@ -31,15 +31,28 @@ const getBookRecommendations = async (
 
     const booksFromAI: BookRecommendation[] = await response.json();
 
-    // 🆕 모든 책의 ISBN 모아서 알라딘에 요청
-    const isbns = booksFromAI.map((book) => book.isbn);
+    // 🆕 유효한 ISBN만 모아서 알라딘에 요청
+    const validBooks = booksFromAI.filter(book => {
+      if (!book.isbn) return false;
+      const cleaned = book.isbn.replace(/[^0-9]/g, '');
+      return cleaned.length === 13 && /^\d{13}$/.test(cleaned);
+    });
+    
+    const isbns = validBooks.map((book) => book.isbn).filter(Boolean) as string[];
     const coverImages = await getMultipleBookCovers(isbns);
 
     // Add cover images to results
-    const results: BookRecommendation[] = booksFromAI.map((book) => ({
-      ...book,
-      coverImage: coverImages[book.isbn] || undefined,
-    }));
+    const results: BookRecommendation[] = booksFromAI.map((book) => {
+      // ISBN 정리
+      const cleanedISBN = book.isbn ? book.isbn.replace(/[^0-9]/g, '') : '';
+      const coverImage = cleanedISBN ? (coverImages[book.isbn] || coverImages[cleanedISBN]) : undefined;
+      
+      return {
+        ...book,
+        isbn: cleanedISBN || book.isbn, // 정리된 ISBN 사용
+        coverImage: coverImage || undefined,
+      };
+    });
 
     console.log('✅ Final results with covers:', results);
 

@@ -7,11 +7,25 @@
  */
 export const getBookCover = async (isbn: string): Promise<string | null> => {
     try {
+      // ISBN이 없거나 유효하지 않으면 API 호출하지 않음
+      if (!isbn || typeof isbn !== 'string') {
+        return null;
+      }
+      
+      // 하이픈 제거하고 숫자만 추출
+      const cleanedISBN = isbn.replace(/[^0-9]/g, '');
+      
+      // 13자리 ISBN이 아니면 무시
+      if (cleanedISBN.length !== 13 || !/^\d{13}$/.test(cleanedISBN)) {
+        console.warn(`Invalid ISBN format: ${isbn}`);
+        return null;
+      }
+      
       // 항상 /api/aladin 사용 (Vercel CLI가 처리)
-      const response = await fetch(`/api/aladin?isbn=${isbn}`);
+      const response = await fetch(`/api/aladin?isbn=${cleanedISBN}`);
       
       if (!response.ok) {
-        console.error('알라딘 API 에러:', response.status);
+        console.error('알라딘 API 에러:', response.status, `for ISBN: ${cleanedISBN}`);
         return null;
       }
       
@@ -33,14 +47,24 @@ export const getBookCover = async (isbn: string): Promise<string | null> => {
     isbns: string[]
   ): Promise<Record<string, string>> => {
     const results: Record<string, string> = {};
-  
-    const promises = isbns.map(async (isbn) => {
+
+    // 유효한 ISBN만 필터링
+    const validISBNs = isbns.filter(isbn => {
+      if (!isbn || typeof isbn !== 'string') return false;
+      const cleaned = isbn.replace(/[^0-9]/g, '');
+      return cleaned.length === 13 && /^\d{13}$/.test(cleaned);
+    });
+
+    const promises = validISBNs.map(async (isbn) => {
       const cover = await getBookCover(isbn);
       if (cover) {
+        // 원본 ISBN과 정리된 ISBN 모두 저장
+        const cleanedISBN = isbn.replace(/[^0-9]/g, '');
         results[isbn] = cover;
+        results[cleanedISBN] = cover; // 정리된 ISBN으로도 접근 가능하도록
       }
     });
-  
+
     await Promise.all(promises);
     return results;
   };

@@ -113,12 +113,13 @@ Ensure the library information is plausible for major public libraries near the 
     const ALADIN_API_KEY = 'ttbnouvellelunec1925001';
     const searchBookISBN = async (title: string, author: string): Promise<{ isbn: string | null, publisher?: string }> => {
       try {
+        // 제목과 저자로 검색 (저자가 있으면 함께 검색)
         const query = author ? `${title} ${author}` : title;
         const url = `https://www.aladin.co.kr/ttb/api/ItemSearch.aspx?` +
           `ttbkey=${ALADIN_API_KEY}` +
           `&Query=${encodeURIComponent(query)}` +
           `&QueryType=Title` +
-          `&MaxResults=3` +
+          `&MaxResults=5` +
           `&start=1` +
           `&SearchTarget=Book` +
           `&output=js` +
@@ -132,13 +133,45 @@ Ensure the library information is plausible for major public libraries near the 
           return { isbn: null };
         }
         
-        // 가장 관련성 높은 첫 번째 결과
-        const firstResult = searchData.item[0];
-        const isbn13 = firstResult.isbn13 || firstResult.isbn || null;
+        // 제목과 저자가 일치하는 결과 찾기
+        const normalizeString = (str: string) => str.replace(/\s+/g, '').toLowerCase();
+        const normalizedTitle = normalizeString(title);
+        const normalizedAuthor = author ? normalizeString(author) : null;
+        
+        // 가장 일치하는 결과 찾기
+        let bestMatch = searchData.item[0];
+        let bestScore = 0;
+        
+        for (const item of searchData.item) {
+          const itemTitle = normalizeString(item.title || '');
+          const itemAuthor = item.author ? normalizeString(item.author) : '';
+          
+          let score = 0;
+          // 제목 일치도 확인
+          if (itemTitle.includes(normalizedTitle) || normalizedTitle.includes(itemTitle)) {
+            score += 10;
+          }
+          // 저자 일치도 확인
+          if (normalizedAuthor && itemAuthor.includes(normalizedAuthor)) {
+            score += 5;
+          }
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = item;
+          }
+        }
+        
+        const isbn13 = bestMatch.isbn13 || bestMatch.isbn || null;
+        
+        if (!isbn13) {
+          console.warn(`No ISBN found in search results for "${title}"`);
+          return { isbn: null };
+        }
         
         return {
-          isbn: isbn13 ? isbn13.replace(/[^0-9]/g, '') : null,
-          publisher: firstResult.publisher || undefined
+          isbn: isbn13.replace(/[^0-9]/g, ''),
+          publisher: bestMatch.publisher || undefined
         };
       } catch (error) {
         console.error(`Error searching ISBN for "${title}":`, error);
@@ -152,29 +185,32 @@ Ensure the library information is plausible for major public libraries near the 
         let isbn = book.isbn || '';
         
         // ISBN이 없거나 유효하지 않으면 알라딘에서 검색
-        if (!isbn || isbn.length !== 13 || !/^\d{13}$/.test(isbn.replace(/[^0-9]/g, ''))) {
-          console.log(`Searching ISBN for: ${book.title} by ${book.author}`);
-          const searchResult = await searchBookISBN(book.title, book.author);
-          if (searchResult.isbn) {
+        const cleanedExistingISBN = book.isbn ? book.isbn.replace(/[^0-9]/g, '') : '';
+        if (!cleanedExistingISBN || cleanedExistingISBN.length !== 13 || !/^\d{13}$/.test(cleanedExistingISBN)) {
+          console.log(`[ISBN Search] Searching for: "${book.title}" by ${book.author || 'Unknown'}`);
+          const searchResult = await searchBookISBN(book.title, book.author || '');
+          if (searchResult.isbn && searchResult.isbn.length === 13) {
             isbn = searchResult.isbn;
+            console.log(`[ISBN Search] ✅ Found ISBN ${isbn} for "${book.title}"`);
             // 알라딘에서 가져온 출판사 정보로 업데이트 (없는 경우에만)
             if (searchResult.publisher && !book.publisher) {
               book.publisher = searchResult.publisher;
             }
           } else {
-            console.warn(`Could not find ISBN for: ${book.title} by ${book.author}`);
-            // ISBN이 없어도 책은 유지 (나중에 표지 이미지가 없을 수 있음)
+            console.warn(`[ISBN Search] ❌ Could not find valid ISBN for: "${book.title}" by ${book.author || 'Unknown'}`);
+            // ISBN을 찾지 못한 경우 빈 문자열로 설정 (타입 호환성)
             isbn = '';
           }
         } else {
           // 기존 ISBN 정리 (하이픈 제거)
-          isbn = isbn.replace(/[^0-9]/g, '');
+          isbn = cleanedExistingISBN;
+          console.log(`[ISBN Search] ✓ Using existing ISBN ${isbn} for "${book.title}"`);
         }
         
         const encodedTitle = encodeURIComponent(book.title);
         return {
           ...book,
-          isbn: isbn,
+          isbn: isbn || '', // null을 빈 문자열로 변환 (타입 호환성)
           purchaseLinks: {
             yes24: `https://www.yes24.com/Product/Search?query=${encodedTitle}`,
             kyobo: `https://search.kyobobook.co.kr/search?keyword=${encodedTitle}`,

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>종이약국 | 당신을 위한 책 처방</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; /* Cleaner, more standard font */
+      }
+      h1, h2, h3, .font-title {
+        font-family: Georgia, serif; /* Elegant serif for titles */
+      }
+
+      /* Subtle Animations */
+      @keyframes subtle-fade-in-up {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      .animate-subtle-fade-in-up { 
+        animation: subtle-fade-in-up 0.8s ease-out forwards; 
+      }
+
+      /* Animation delay classes */
+      .delay-0 { animation-delay: 0ms; }
+      .delay-150 { animation-delay: 150ms; }
+      .delay-300 { animation-delay: 300ms; }
+      .delay-450 { animation-delay: 450ms; }
+
+      /* Custom scrollbar */
+      .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+      
+      /* Light Mode */
+      .custom-scrollbar::-webkit-scrollbar-track { background: #F4F2FF; border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #E6E0FF; border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #C8BBEA; }
+
+      /* Dark Mode */
+      .dark .custom-scrollbar::-webkit-scrollbar-track { background: #1F1D36; }
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #3D3B6A; }
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4E4C86; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.553.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1"
+  }
+}
+</script>
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            // Light Theme
+            'lilac-sub': '#F4F2FF', // Background secondary
+            'lavender-main': '#8A72E4', // Primary accent
+            'border-line': '#E6E0FF', // Borders
+            'text-dark': '#302E44', // Main text
+            
+            // Dark Theme
+            'dawn-dark': '#1F1D36', // Background primary
+            'blue-sub': '#3D3B6A', // Background secondary / accents
+            'gold-main': '#E9D5A1', // Primary accent
+            'border-dark': '#383660', // Borders
+            'text-light': '#E9E3FF', // Main text
+          },
+          fontFamily: {
+            'title': ['Georgia', 'serif'],
+            'body': ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -42,7 +42,7 @@ export default async function handler(
           title: { type: Type.STRING, description: "The book title in Korean." },
           author: { type: Type.STRING, description: "The author's name in Korean." },
           publisher: { type: Type.STRING, description: "The publisher's name in Korean." },
-          isbn: { type: Type.STRING, description: "The book's exact 13-digit ISBN-13 number (without hyphens or spaces). This MUST be a real, existing ISBN for the actual book you are recommending. Do not make up or guess ISBNs. Only provide ISBNs for books that actually exist and are available in South Korea." },
+          isbn: { type: Type.STRING, description: "OPTIONAL: If you know the exact ISBN-13, provide it. Otherwise, leave empty and the system will search for it." },
           description: { type: Type.STRING, description: "A short, insightful one-sentence description of the book." },
           aiReason: { type: Type.STRING, description: "An empathetic reason for recommending this book, written in a calm and thoughtful tone." },
           vibe: {
@@ -65,7 +65,7 @@ export default async function handler(
             }
           },
         },
-        required: ['title', 'author', 'publisher', 'isbn', 'description', 'aiReason', 'vibe', 'libraries']
+        required: ['title', 'author', 'publisher', 'description', 'aiReason', 'vibe', 'libraries']
       }
     };
 
@@ -85,9 +85,9 @@ ${genrePreference}
 Their goal for reading is: ${userInput.purpose || "Not specified."}
 ${locationInfo}
 
-Based on this, recommend exactly 3 books. For each book, provide the requested information including its exact 13-digit ISBN-13 number.
+Based on this, recommend exactly 3 books. For each book, provide the title, author, publisher, description, and other requested information.
 
-CRITICAL: The ISBN must be a real, existing ISBN-13 for the actual book you are recommending. Do NOT make up, guess, or generate fake ISBNs. Only recommend books that you know exist and can provide their real ISBN-13 numbers. The ISBN must be exactly 13 digits, without hyphens or spaces (e.g., "9788936434267").
+IMPORTANT: Only recommend real books that actually exist. Provide accurate book titles and author names in Korean. The ISBN field is optional - if you know the exact ISBN-13, you can provide it, but it's better to leave it empty and let the system search for the correct ISBN based on the title and author.
 
 Ensure the library information is plausible for major public libraries near the user's specified location.`;
 
@@ -109,33 +109,72 @@ Ensure the library information is plausible for major public libraries near the 
     const jsonString = response.text.trim();
     const booksFromAI = JSON.parse(jsonString);
 
-    // Validate and clean ISBNs
-    const validateISBN = (isbn: string): string | null => {
-      if (!isbn || typeof isbn !== 'string') return null;
-      // Remove any hyphens, spaces, or non-digit characters
-      const cleaned = isbn.replace(/[^0-9]/g, '');
-      // Must be exactly 13 digits
-      if (cleaned.length === 13 && /^\d{13}$/.test(cleaned)) {
-        return cleaned;
+    // 알라딘 검색 API로 실제 ISBN 가져오기
+    const ALADIN_API_KEY = 'ttbnouvellelunec1925001';
+    const searchBookISBN = async (title: string, author: string): Promise<{ isbn: string | null, publisher?: string }> => {
+      try {
+        const query = author ? `${title} ${author}` : title;
+        const url = `https://www.aladin.co.kr/ttb/api/ItemSearch.aspx?` +
+          `ttbkey=${ALADIN_API_KEY}` +
+          `&Query=${encodeURIComponent(query)}` +
+          `&QueryType=Title` +
+          `&MaxResults=3` +
+          `&start=1` +
+          `&SearchTarget=Book` +
+          `&output=js` +
+          `&Version=20131101`;
+
+        const searchResponse = await fetch(url);
+        const searchData = await searchResponse.json();
+        
+        if (!searchData.item || searchData.item.length === 0) {
+          console.warn(`No results found for "${title}" by ${author}`);
+          return { isbn: null };
+        }
+        
+        // 가장 관련성 높은 첫 번째 결과
+        const firstResult = searchData.item[0];
+        const isbn13 = firstResult.isbn13 || firstResult.isbn || null;
+        
+        return {
+          isbn: isbn13 ? isbn13.replace(/[^0-9]/g, '') : null,
+          publisher: firstResult.publisher || undefined
+        };
+      } catch (error) {
+        console.error(`Error searching ISBN for "${title}":`, error);
+        return { isbn: null };
       }
-      return null;
     };
 
-    // Programmatically add purchase links and validate ISBNs
-    const results = booksFromAI
-      .map((book: any) => {
-        const validatedISBN = validateISBN(book.isbn);
-        if (!validatedISBN) {
-          console.warn(`Invalid ISBN for book "${book.title}": ${book.isbn}`);
-          // Keep the book but with cleaned ISBN (or null if invalid)
-          book.isbn = validatedISBN || book.isbn.replace(/[^0-9]/g, '').slice(0, 13) || '';
+    // 각 책에 대해 실제 ISBN 검색
+    const resultsWithISBNs = await Promise.all(
+      booksFromAI.map(async (book: any) => {
+        let isbn = book.isbn || '';
+        
+        // ISBN이 없거나 유효하지 않으면 알라딘에서 검색
+        if (!isbn || isbn.length !== 13 || !/^\d{13}$/.test(isbn.replace(/[^0-9]/g, ''))) {
+          console.log(`Searching ISBN for: ${book.title} by ${book.author}`);
+          const searchResult = await searchBookISBN(book.title, book.author);
+          if (searchResult.isbn) {
+            isbn = searchResult.isbn;
+            // 알라딘에서 가져온 출판사 정보로 업데이트 (없는 경우에만)
+            if (searchResult.publisher && !book.publisher) {
+              book.publisher = searchResult.publisher;
+            }
+          } else {
+            console.warn(`Could not find ISBN for: ${book.title} by ${book.author}`);
+            // ISBN이 없어도 책은 유지 (나중에 표지 이미지가 없을 수 있음)
+            isbn = '';
+          }
         } else {
-          book.isbn = validatedISBN;
+          // 기존 ISBN 정리 (하이픈 제거)
+          isbn = isbn.replace(/[^0-9]/g, '');
         }
         
         const encodedTitle = encodeURIComponent(book.title);
         return {
           ...book,
+          isbn: isbn,
           purchaseLinks: {
             yes24: `https://www.yes24.com/Product/Search?query=${encodedTitle}`,
             kyobo: `https://search.kyobobook.co.kr/search?keyword=${encodedTitle}`,
@@ -143,7 +182,10 @@ Ensure the library information is plausible for major public libraries near the 
           }
         };
       })
-      .filter((book: any) => book.isbn && book.isbn.length === 13); // Filter out books with invalid ISBNs
+    );
+
+    // ISBN이 있는 책만 반환 (또는 모두 반환하고 클라이언트에서 처리)
+    const results = resultsWithISBNs;
 
     res.status(200).json(results);
 

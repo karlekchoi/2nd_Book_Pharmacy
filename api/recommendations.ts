@@ -207,10 +207,37 @@ Ensure the library information is plausible for major public libraries near the 
           console.log(`[ISBN Search] ✓ Using existing ISBN ${isbn} for "${book.title}"`);
         }
         
+        // ISBN이 있으면 표지 이미지도 가져오기
+        let coverImage: string | undefined = undefined;
+        if (isbn && isbn.length === 13) {
+          try {
+            const coverUrl = `https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?` +
+              `ttbkey=${ALADIN_API_KEY}` +
+              `&itemIdType=ISBN13` +
+              `&ItemId=${isbn}` +
+              `&output=js` +
+              `&Version=20131101` +
+              `&Cover=Big`;
+            
+            const coverResponse = await fetch(coverUrl);
+            const coverData = await coverResponse.json();
+            coverImage = coverData.item?.[0]?.cover || undefined;
+            
+            if (coverImage) {
+              console.log(`[Cover] ✅ Found cover for "${book.title}": ${coverImage}`);
+            } else {
+              console.warn(`[Cover] ❌ No cover found for "${book.title}" (ISBN: ${isbn})`);
+            }
+          } catch (error) {
+            console.error(`[Cover] Error fetching cover for "${book.title}":`, error);
+          }
+        }
+        
         const encodedTitle = encodeURIComponent(book.title);
         return {
           ...book,
           isbn: isbn || '', // null을 빈 문자열로 변환 (타입 호환성)
+          coverImage: coverImage,
           purchaseLinks: {
             yes24: `https://www.yes24.com/Product/Search?query=${encodedTitle}`,
             kyobo: `https://search.kyobobook.co.kr/search?keyword=${encodedTitle}`,

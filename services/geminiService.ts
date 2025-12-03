@@ -1,7 +1,6 @@
 // services/geminiService.ts
 // Client-side wrapper for the recommendations API
 import type { BookRecommendation, UserInput } from '../types';
-import { getMultipleBookCovers } from './aladinService';
 
 const getBookRecommendations = async (
   userInput: UserInput, 
@@ -31,27 +30,21 @@ const getBookRecommendations = async (
 
     const booksFromAI: BookRecommendation[] = await response.json();
 
-    // 🆕 유효한 ISBN만 모아서 알라딘에 요청
-    const validBooks = booksFromAI.filter(book => {
-      if (!book.isbn) return false;
-      const cleaned = book.isbn.replace(/[^0-9]/g, '');
-      return cleaned.length === 13 && /^\d{13}$/.test(cleaned);
-    });
-    
-    const isbns = validBooks.map((book) => book.isbn).filter(Boolean) as string[];
-    const coverImages = await getMultipleBookCovers(isbns);
-
-    // Add cover images to results
+    // 서버에서 이미 표지 이미지를 가져왔으므로, 클라이언트에서는 추가 처리만 수행
     const results: BookRecommendation[] = booksFromAI.map((book) => {
-      // ISBN 정리
+      // ISBN 정리 (하이픈 제거)
       const cleanedISBN = book.isbn ? book.isbn.replace(/[^0-9]/g, '') : '';
-      const coverImage = cleanedISBN ? (coverImages[book.isbn] || coverImages[cleanedISBN]) : undefined;
       
       return {
         ...book,
         isbn: cleanedISBN || book.isbn, // 정리된 ISBN 사용
-        coverImage: coverImage || undefined,
+        // coverImage는 서버에서 이미 설정됨
       };
+    });
+
+    // 디버깅: 각 책의 표지 이미지 상태 확인
+    results.forEach(book => {
+      console.log(`📖 Book: ${book.title} | ISBN: ${book.isbn} | Cover Image: ${book.coverImage || 'undefined'}`);
     });
 
     console.log('✅ Final results with covers:', results);
